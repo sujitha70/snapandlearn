@@ -1,5 +1,6 @@
 import os
 import smtplib
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -325,26 +326,56 @@ def add_message(role, kind, content):
 
 
 def ask_gemini(parts):
-    """Sends text and/or image parts to the active Gemini chat session, with graceful model fallback."""
-    try:
-        response = st.session_state.chat.send_message(parts)
-        return response.text
-    except Exception as error:
-        error_msg = str(error)
-        # If the chosen model is not found (e.g. 404 or unsupported model name), try available flash models
-        if "not found" in error_msg.lower() or "404" in error_msg or "unsupported" in error_msg.lower():
-            for fallback_model in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
-                try:
-                    fallback_chat = gemini_client.chats.create(
-                        model=fallback_model,
-                        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
-                    )
-                    res = fallback_chat.send_message(parts)
-                    st.session_state.chat = fallback_chat
-                    return f"*(Note: Model `{MODEL_NAME}` is not currently available on the Gemini API; automatically answered using `{fallback_model}`)*\n\n{res.text}"
-                except Exception:
-                    continue
-        return f"Sorry, something went wrong while analyzing: {error}"
+    """Sends text and/or image parts with automatic retry and model failover for 503 high demand and 404 errors."""
+    candidate_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    current_model = getattr(st.session_state, "active_model", MODEL_NAME)
+
+    if current_model in candidate_models:
+        candidate_models.remove(current_model)
+    candidate_models.insert(0, current_model)
+
+    last_error = None
+
+    # Step 1: Try current active chat session with brief backoff if 503 / high demand
+    for attempt in range(2):
+        try:
+            response = st.session_state.chat.send_message(parts)
+            return response.text
+        except Exception as error:
+            last_error = error
+            err_str = str(error).lower()
+            # If 503 high demand or 429 rate limit, wait briefly before retrying
+            if ("503" in err_str or "unavailable" in err_str or "high demand" in err_str or "429" in err_str) and attempt == 0:
+                time.sleep(1.5)
+                continue
+            break
+
+    # Step 2: Failover to alternative Flash models if primary model is unavailable
+    for fallback_model in candidate_models:
+        if fallback_model == current_model:
+            continue
+        try:
+            time.sleep(0.5)
+            fallback_chat = gemini_client.chats.create(
+                model=fallback_model,
+                config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+            )
+            res = fallback_chat.send_message(parts)
+            st.session_state.chat = fallback_chat
+            st.session_state.active_model = fallback_model
+            return f"*(Switched to `{fallback_model}` due to high traffic on `{current_model}`)*\n\n{res.text}"
+        except Exception as fallback_err:
+            last_error = fallback_err
+            continue
+
+    # Step 3: Polite, user-friendly notice if all endpoints are temporarily saturated
+    error_msg = str(last_error) if last_error else "Service temporarily busy"
+    if "503" in error_msg or "unavailable" in error_msg.lower() or "high demand" in error_msg.lower():
+        return (
+            "⏳ **Google Gemini servers are currently experiencing high demand.**\n\n"
+            "This traffic spike is temporary. Please wait 5–10 seconds and resend your question."
+        )
+    return f"Sorry, something went wrong while analyzing: {error_msg}"
 
 
 # App Header with Title and Email Summary Action
