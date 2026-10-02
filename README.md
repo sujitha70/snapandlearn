@@ -1,5 +1,8 @@
 # 📚 Snap & Learn — AI Vision Study Buddy & Homework Decoder
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://snapandlearn-omkqpcpfnmnkxaxjgfcj2d.streamlit.app/)
+
+> 🌐 **Live Deployed App**: [https://snapandlearn-omkqpcpfnmnkxaxjgfcj2d.streamlit.app/](https://snapandlearn-omkqpcpfnmnkxaxjgfcj2d.streamlit.app/)  
 > **Snap it. Learn it. Email yourself the study notes.**  
 > An intelligent educational assistant built with **Google Gemini (Vision + Chat)** and **Python SMTP (Gmail)** that analyzes photographed notes, textbook pages, math problems, and diagrams, breaks them down into intuitive step-by-step explanations, and emails a formatted revision sheet straight to the student's inbox.
 
