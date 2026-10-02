@@ -87,7 +87,7 @@ st.markdown(
 )
 
 # --- Configuration & Secrets Handling ---
-MODEL_NAME = st.secrets.get("GEMINI_MODEL", "gemini-3.8-flash")
+MODEL_NAME = st.secrets.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 
 # Helper to retrieve secret or environment variable
@@ -324,10 +324,24 @@ if "onboarded" not in st.session_state:
                 st.session_state.recipient_email = recipient_email.strip()
                 
                 # Create the chat session with the specialized study tutor system prompt
-                st.session_state.chat = gemini_client.chats.create(
-                    model=MODEL_NAME,
-                    config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
-                )
+                active_models = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.8-flash"]
+                created_chat = None
+                for m in active_models:
+                    try:
+                        created_chat = gemini_client.chats.create(
+                            model=m,
+                            config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+                        )
+                        st.session_state.active_model = m
+                        break
+                    except Exception:
+                        continue
+                if created_chat is None:
+                    created_chat = gemini_client.chats.create(
+                        model=MODEL_NAME,
+                        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+                    )
+                st.session_state.chat = created_chat
                 st.session_state.messages = []
                 st.session_state.onboarded = True
                 st.rerun()
@@ -361,7 +375,7 @@ def add_message(role, kind, content):
 
 def ask_gemini(parts):
     """Sends text and/or image parts with automatic retry and model failover for 503 high demand and 404 errors."""
-    candidate_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    candidate_models = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.8-flash"]
     current_model = getattr(st.session_state, "active_model", MODEL_NAME)
 
     if current_model in candidate_models:
