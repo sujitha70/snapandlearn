@@ -4,6 +4,20 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 import streamlit as st
+
+# When executed directly via `python app.py` or editor play button, automatically launch Streamlit
+try:
+    from streamlit.runtime import exists as _runtime_exists
+
+    if not _runtime_exists():
+        import sys
+        from streamlit.web import cli as stcli
+
+        sys.argv = ["streamlit", "run", __file__]
+        sys.exit(stcli.main())
+except ImportError:
+    pass
+
 from google import genai
 from google.genai import types
 
@@ -74,6 +88,7 @@ st.markdown(
 # --- Configuration & Secrets Handling ---
 MODEL_NAME = st.secrets.get("GEMINI_MODEL", "gemini-3.8-flash")
 
+
 # Helper to retrieve secret or environment variable
 def get_secret(key, default=""):
     try:
@@ -84,15 +99,17 @@ def get_secret(key, default=""):
         pass
     return os.environ.get(key, default)
 
+
 GEMINI_API_KEY = get_secret("GEMINI_API_KEY", "")
 GMAIL_ADDRESS = get_secret("GMAIL_ADDRESS", "")
 GMAIL_APP_PASSWORD = get_secret("GMAIL_APP_PASSWORD", "")
 
 
 @st.cache_resource
-def get_gemini_client(api_key: str):
+def get_gemini_client(api_key: str) -> genai.Client:
     """Initializes and caches the Gemini client to avoid connection resets."""
-    return genai.Client(api_key=api_key)
+    clean_key = api_key if api_key and not api_key.startswith("your-") else "unconfigured_key"
+    return genai.Client(api_key=clean_key)
 
 
 def is_valid_email(email: str) -> bool:
@@ -338,15 +355,18 @@ with header_col:
 
 with action_col:
     # Button is disabled until at least one exchange (beyond welcome message) has occurred
-    send_disabled = len(st.session_state.messages) <= 2
+    curr_messages = st.session_state.get("messages", [])
+    send_disabled = len(curr_messages) <= 2
     if st.button("📧 Email Study Notes", disabled=send_disabled, use_container_width=True, type="primary"):
         with st.spinner("Compiling high-yield revision sheet..."):
             summary = ask_gemini([SUMMARY_REQUEST_PROMPT])
         
-        with st.spinner(f"Sending study notes to {st.session_state.recipient_email}..."):
+        user_email = st.session_state.get("recipient_email", "")
+        user_name = st.session_state.get("name", "Student")
+        with st.spinner(f"Sending study notes to {user_email}..."):
             success, info = send_email(
-                st.session_state.recipient_email,
-                st.session_state.name,
+                user_email,
+                user_name,
                 summary,
             )
 
@@ -359,11 +379,16 @@ with action_col:
             with st.expander("👀 View Generated Revision Sheet (Copy Notes Here)"):
                 st.markdown(summary)
 
-st.caption(f"👤 Studying as **{st.session_state.name}** · Notes will be delivered to **{st.session_state.recipient_email}**")
+user_name = st.session_state.get("name", "Student")
+user_email = st.session_state.get("recipient_email", "")
+st.caption(f"👤 Studying as **{user_name}** · Notes will be delivered to **{user_email}**")
 
 # Display Conversation History
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
 if not st.session_state.messages:
-    add_message("assistant", "text", WELCOME_MESSAGE_TEMPLATE.format(name=st.session_state.name))
+    add_message("assistant", "text", WELCOME_MESSAGE_TEMPLATE.format(name=user_name))
 else:
     for message in st.session_state.messages:
         render_message(message)
