@@ -7,17 +7,18 @@ from email.mime.text import MIMEText
 import streamlit as st
 
 # When executed directly via `python app.py` or editor play button, automatically launch Streamlit
-try:
-    from streamlit.runtime import exists as _runtime_exists
+if __name__ == "__main__":
+    try:
+        from streamlit.runtime import exists as _runtime_exists
 
-    if not _runtime_exists():
-        import sys
-        from streamlit.web import cli as stcli
+        if not _runtime_exists():
+            import sys
+            from streamlit.web import cli as stcli
 
-        sys.argv = ["streamlit", "run", __file__]
-        sys.exit(stcli.main())
-except ImportError:
-    pass
+            sys.argv = ["streamlit", "run", __file__]
+            sys.exit(stcli.main())
+    except ImportError:
+        pass
 
 from google import genai
 from google.genai import types
