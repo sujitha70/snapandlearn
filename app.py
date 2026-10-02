@@ -72,7 +72,7 @@ st.markdown(
 )
 
 # --- Configuration & Secrets Handling ---
-MODEL_NAME = st.secrets.get("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL_NAME = st.secrets.get("GEMINI_MODEL", "gemini-3.8-flash")
 
 # Helper to retrieve secret or environment variable
 def get_secret(key, default=""):
@@ -308,11 +308,25 @@ def add_message(role, kind, content):
 
 
 def ask_gemini(parts):
-    """Sends text and/or image parts to the active Gemini chat session."""
+    """Sends text and/or image parts to the active Gemini chat session, with graceful model fallback."""
     try:
         response = st.session_state.chat.send_message(parts)
         return response.text
     except Exception as error:
+        error_msg = str(error)
+        # If the chosen model is not found (e.g. 404 or unsupported model name), try available flash models
+        if "not found" in error_msg.lower() or "404" in error_msg or "unsupported" in error_msg.lower():
+            for fallback_model in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+                try:
+                    fallback_chat = gemini_client.chats.create(
+                        model=fallback_model,
+                        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+                    )
+                    res = fallback_chat.send_message(parts)
+                    st.session_state.chat = fallback_chat
+                    return f"*(Note: Model `{MODEL_NAME}` is not currently available on the Gemini API; automatically answered using `{fallback_model}`)*\n\n{res.text}"
+                except Exception:
+                    continue
         return f"Sorry, something went wrong while analyzing: {error}"
 
 
