@@ -101,7 +101,36 @@ def get_secret(key, default=""):
     return os.environ.get(key, default)
 
 
-GEMINI_API_KEY = get_secret("GEMINI_API_KEY", "")
+def save_gemini_key_to_secrets(new_key: str):
+    """Saves the Gemini API key to local .streamlit/secrets.toml so it is remembered permanently."""
+    if not new_key or new_key.startswith("your-"):
+        return
+    secrets_path = os.path.join(".streamlit", "secrets.toml")
+    try:
+        os.makedirs(".streamlit", exist_ok=True)
+        if os.path.exists(secrets_path):
+            with open(secrets_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            lines = content.splitlines()
+            replaced = False
+            for idx, line in enumerate(lines):
+                if line.strip().startswith("GEMINI_API_KEY"):
+                    lines[idx] = f'GEMINI_API_KEY = "{new_key}"'
+                    replaced = True
+                    break
+            if not replaced:
+                lines.insert(0, f'GEMINI_API_KEY = "{new_key}"')
+            new_content = "\n".join(lines) + "\n"
+            with open(secrets_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+        else:
+            with open(secrets_path, "w", encoding="utf-8") as f:
+                f.write(f'GEMINI_API_KEY = "{new_key}"\n')
+    except Exception:
+        pass
+
+
+GEMINI_API_KEY = get_secret("GEMINI_API_KEY", "") or st.session_state.get("custom_gemini_key", "")
 GMAIL_ADDRESS = get_secret("GMAIL_ADDRESS", "")
 GMAIL_APP_PASSWORD = get_secret("GMAIL_APP_PASSWORD", "")
 
@@ -220,8 +249,11 @@ with st.sidebar:
         st.warning("Gemini API: Key Needed ⚠️")
         gemini_input = st.text_input("Enter Gemini API Key", type="password")
         if gemini_input:
-            GEMINI_API_KEY = gemini_input
-            st.session_state.custom_gemini_key = gemini_input
+            clean_key = gemini_input.strip()
+            GEMINI_API_KEY = clean_key
+            st.session_state.custom_gemini_key = clean_key
+            save_gemini_key_to_secrets(clean_key)
+            st.rerun()
 
     if GMAIL_ADDRESS and GMAIL_APP_PASSWORD:
         st.success("Gmail SMTP: Configured ✅")
@@ -284,6 +316,8 @@ if "onboarded" not in st.session_state:
             st.error("Please enter a valid Gemini API Key to proceed.")
         else:
             try:
+                save_gemini_key_to_secrets(active_key)
+                st.session_state.custom_gemini_key = active_key
                 gemini_client = get_gemini_client(active_key)
                 st.session_state.active_gemini_key = active_key
                 st.session_state.name = name.strip()
