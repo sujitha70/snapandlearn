@@ -450,12 +450,14 @@ with action_col:
             )
 
         if success:
-            st.success("Study notes sent! Check your inbox / spam folder 📬")
-            with st.expander("👀 View Generated Revision Sheet"):
+            st.success(f"✅ Study notes sent to **{user_email}**! (Please check your Inbox and Spam/Junk folder) 📬")
+            with st.expander("👀 View Generated Revision Sheet", expanded=True):
                 st.markdown(summary)
         else:
-            st.error(f"Could not send email: {info}")
-            with st.expander("👀 View Generated Revision Sheet (Copy Notes Here)"):
+            st.error(f"⚠️ Could not send email: {info}")
+            if "credentials not configured" in str(info).lower():
+                st.info("💡 If you are on Streamlit Cloud, please make sure `GMAIL_ADDRESS` and `GMAIL_APP_PASSWORD` are saved in your Streamlit Cloud Settings ➔ Secrets.")
+            with st.expander("👀 View Generated Revision Sheet (Copy Notes Here)", expanded=True):
                 st.markdown(summary)
 
 user_name = st.session_state.get("name", "Student")
